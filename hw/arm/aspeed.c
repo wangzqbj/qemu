@@ -169,6 +169,10 @@ struct AspeedMachineState {
 #define FUJI_BMC_HW_STRAP1    0x00000000
 #define FUJI_BMC_HW_STRAP2    0x00000000
 
+/* NF5280M7 hardware value */
+#define NF5280M7_BMC_HW_STRAP1    0x00000000
+#define NF5280M7_BMC_HW_STRAP2    0x00000000
+
 /* Bletchley hardware value */
 /* TODO: Leave same as EVB for now. */
 #define BLETCHLEY_BMC_HW_STRAP1 AST2600_EVB_HW_STRAP1
@@ -759,6 +763,30 @@ static void fp5280g2_bmc_i2c_init(AspeedMachineState *bmc)
     create_pca9552(soc, 8, 0x30);
 }
 
+static void nf5280m7_bmc_i2c_init(AspeedMachineState *bmc)
+{
+    AspeedSoCState *soc = &bmc->soc;
+    I2CSlave *i2c_mux;
+
+    /* The at24c256 */
+    at24c_eeprom_init(aspeed_i2c_get_bus(&soc->i2c, 1), 0x50, 32768, 1);
+
+    i2c_mux = i2c_slave_create_simple(aspeed_i2c_get_bus(&soc->i2c, 2),
+                     "pca9546", 0x70);
+    i2c_slave_create_simple(pca954x_i2c_get_bus(i2c_mux, 0), TYPE_TMP105,
+                     0x49);
+    i2c_slave_create_simple(pca954x_i2c_get_bus(i2c_mux, 0), "emc1413",
+                     0x4c);
+
+    /* It expects a pca9555 but a pca9552 is compatible */
+    i2c_slave_create_simple(aspeed_i2c_get_bus(&soc->i2c, 10), TYPE_PCA9552,
+                     0x21);
+    /* It expects a pca9555 but a pca9552 is compatible */
+    i2c_slave_create_simple(aspeed_i2c_get_bus(&soc->i2c, 10), TYPE_PCA9552,
+                     0x22);
+}
+
+
 static void rainier_bmc_i2c_init(AspeedMachineState *bmc)
 {
     AspeedSoCState *soc = &bmc->soc;
@@ -1325,6 +1353,25 @@ static void aspeed_machine_fp5280g2_class_init(ObjectClass *oc, void *data)
         aspeed_soc_num_cpus(amc->soc_name);
 };
 
+static void aspeed_machine_nf5280m7_class_init(ObjectClass *oc, void *data)
+{
+    MachineClass *mc = MACHINE_CLASS(oc);
+    AspeedMachineClass *amc = ASPEED_MACHINE_CLASS(oc);
+
+    mc->desc       = "Inspur NF5280M7 BMC (Cortex-A7)";
+    amc->soc_name  = "ast2600-a3";
+    amc->hw_strap1 = NF5280M7_BMC_HW_STRAP1;
+    amc->hw_strap2 = NF5280M7_BMC_HW_STRAP2;
+    amc->fmc_model = "n25q512a";
+    amc->spi_model = "mx25l25635e";
+    amc->num_cs    = 2;
+    amc->macs_mask  = ASPEED_MAC2_ON;
+    amc->i2c_init  = nf5280m7_bmc_i2c_init;
+    mc->default_ram_size = 1 * GiB;
+    mc->default_cpus = mc->min_cpus = mc->max_cpus =
+        aspeed_soc_num_cpus(amc->soc_name);
+};
+
 static void aspeed_machine_rainier_class_init(ObjectClass *oc, void *data)
 {
     MachineClass *mc = MACHINE_CLASS(oc);
@@ -1509,6 +1556,10 @@ static const TypeInfo aspeed_machine_types[] = {
         .name          = MACHINE_TYPE_NAME("fp5280g2-bmc"),
         .parent        = TYPE_ASPEED_MACHINE,
         .class_init    = aspeed_machine_fp5280g2_class_init,
+    }, {
+	.name          = MACHINE_TYPE_NAME("nf5280m7-bmc"),
+        .parent        = TYPE_ASPEED_MACHINE,
+        .class_init    = aspeed_machine_nf5280m7_class_init,
     }, {
         .name          = MACHINE_TYPE_NAME("quanta-q71l-bmc"),
         .parent        = TYPE_ASPEED_MACHINE,
